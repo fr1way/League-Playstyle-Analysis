@@ -37,7 +37,9 @@ def get_cluster_centroids(kmeans_model, scaler, feature_names):
         columns=feature_names
     )
 
-def classify_playstyle(row, scaler, kmeans_model, cluster_names):
+def classify_playstyle(row, scaler, model, cluster_map):
+    import numpy as np
+
     duration_mins = row['duration'] / 60
     kda = (row['kills'] + row['assists']) / (row['deaths'] + 1)
     dpm = row['damage_to_champ'] / (duration_mins + 1e-6)
@@ -55,9 +57,16 @@ def classify_playstyle(row, scaler, kmeans_model, cluster_names):
     feature_vec = pd.DataFrame([[fighting, farming, vision_pm, objective_score, survivability]],
                                columns=['fighting_score', 'farming_score', 'vision_score_pm', 'objective_score', 'survivability_score'])
     vec_scaled = scaler.transform(feature_vec)
-    cid = int(kmeans_model.predict(vec_scaled)[0])
+
+    # Check if model supports .predict()
+    if hasattr(model, "predict"):
+        cid = int(model.predict(vec_scaled)[0])
+        label = cluster_map.get(cid, f"Cluster {cid}")
+    else:
+        raise ValueError("This model does not support prediction. Please use KMeans for classification.")
+
     return {
         "cluster": cid,
-        "label": cluster_names.get(cid, f"Cluster {cid}"),
+        "label": label,
         "features": feature_vec.iloc[0].to_dict()
     }
