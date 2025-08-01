@@ -3,12 +3,11 @@ import pandas as pd
 from data.preprocess import preprocess_lol_data
 from models.clustering import (
     run_pca, run_kmeans, run_hdbscan,
-    evaluate_kmeans_clusters,
     classify_playstyle
 )
 from utils.plotting import plot_clusters, plot_radar
 
-st.title("LoL Team Playstyle Clustering")
+st.title("League of Legends Team Playstyle Clustering")
 
 # === SESSION STATE INITIALIZATION ===
 if "dataset_loaded" not in st.session_state:
@@ -23,9 +22,11 @@ if "kmeans" not in st.session_state:
     st.session_state.kmeans = None
 if "labels" not in st.session_state:
     st.session_state.labels = None
+if "method" not in st.session_state:
+    st.session_state.method = "KMeans"
 
 # === LOAD DATASET ===
-if st.button("Load Dataset"):
+if st.button("Load Dataset", key="load_dataset_button"):
     data_path = "src/League_of_Legends_Ranked_Match_Data.csv"
     X_scaled, original_df, scaler = preprocess_lol_data(data_path)
     st.session_state.dataset_loaded = True
@@ -42,12 +43,12 @@ if st.session_state.dataset_loaded:
 
     st.write("Processed Feature Sample", X_scaled.head())
 
-    method = st.selectbox("Clustering Method", ["KMeans", "HDBSCAN"])
+    st.session_state.method = st.selectbox("Clustering Method", ["KMeans", "HDBSCAN"])
 
-    if st.button("Run Clustering"):
+    if st.button("Run Clustering", key="run_clustering_button"):
         reduced_data, _ = run_pca(X_scaled)
 
-        if method == "KMeans":
+        if st.session_state.method == "KMeans":
             labels, kmeans = run_kmeans(X_scaled)
         else:
             labels, kmeans = run_hdbscan(X_scaled)
@@ -55,7 +56,7 @@ if st.session_state.dataset_loaded:
         st.session_state.kmeans = kmeans
         st.session_state.labels = labels
 
-        # PCA plot
+        # PCA scatter
         fig = plot_clusters(reduced_data, labels)
         st.pyplot(fig)
 
@@ -66,17 +67,32 @@ if st.session_state.dataset_loaded:
         cluster_summary = labeled_data.groupby("Cluster").mean().round(2)
         st.dataframe(cluster_summary)
 
-        # Radar chart per cluster
-        centroids = pd.DataFrame(kmeans.cluster_centers_, columns=X_scaled.columns)
-        for cluster_id, row in cluster_summary.iterrows():
-            st.markdown(f"### Cluster {cluster_id}")
-            top_features = row.sort_values(ascending=False).head(2).index.tolist()
-            st.write(f"- Top characteristics: **{top_features[0]}**, **{top_features[1]}**")
+        # === RADAR CHARTS ===
+        if st.session_state.method == "KMeans":
+            centroids = pd.DataFrame(kmeans.cluster_centers_, columns=X_scaled.columns)
+            for cluster_id, row in cluster_summary.iterrows():
+                st.markdown(f"### Cluster {cluster_id}")
+                top_features = row.sort_values(ascending=False).head(2).index.tolist()
+                st.write(f"- Top characteristics: **{top_features[0]}**, **{top_features[1]}**")
 
-            cluster_centroid_df = centroids.iloc[[cluster_id]]
-            fig_cluster_radar = plot_radar(cluster_centroid_df, X_scaled.columns.tolist(), titles=[f"Cluster {cluster_id}"])
-            st.pyplot(fig_cluster_radar)
+                cluster_centroid_df = centroids.iloc[[cluster_id]]
+                fig_cluster_radar = plot_radar(cluster_centroid_df, X_scaled.columns.tolist(), titles=[f"Cluster {cluster_id}"])
+                st.pyplot(fig_cluster_radar)
 
+        else:
+            st.subheader("HDBSCAN Cluster Radar Charts (Mean Values)")
+            cluster_summary_df = X_scaled.copy()
+            cluster_summary_df["Cluster"] = labels
+            means_by_cluster = cluster_summary_df.groupby("Cluster").mean()
+
+            for cluster_id, row in means_by_cluster.iterrows():
+                st.markdown(f"### Cluster {cluster_id}")
+                top_features = row.sort_values(ascending=False).head(2).index.tolist()
+                st.write(f"- Top characteristics: **{top_features[0]}**, **{top_features[1]}**")
+
+                radar_df = means_by_cluster.loc[[cluster_id]]
+                fig = plot_radar(radar_df, X_scaled.columns.tolist(), titles=[f"Cluster {cluster_id}"])
+                st.pyplot(fig)
 
         # Win rate by cluster
         if "win" in original_df.columns:
@@ -88,7 +104,9 @@ if st.session_state.dataset_loaded:
 
 # === PLAYER CLASSIFICATION ===
 if st.checkbox("Classify a Sample Player"):
-    if st.session_state.kmeans and st.session_state.original_df is not None:
+    if st.session_state.method == "HDBSCAN":
+        st.warning("HDBSCAN does not support classification. Please switch to KMeans.")
+    elif st.session_state.kmeans and st.session_state.original_df is not None:
         sample_idx = st.number_input("Select player row index", min_value=0, max_value=len(st.session_state.original_df) - 1, step=1)
         cluster_names = {
             0: "Teamfighter",
