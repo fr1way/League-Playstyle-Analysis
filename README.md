@@ -2,7 +2,7 @@
 
 This project uses unsupervised learning to discover strategic team-play archetypes in League of Legends ranked solo-queue matches.
 
-**Live Demo** [https://league-playstyle-analysis.streamlit.app](https://llmpedia-app.streamlit.app)
+**Live Demo** [https://league-playstyle-analysis.streamlit.app](https://league-playstyle-analysis.streamlit.app)
 
 ## Features
 - PCA for dimensionality reduction
